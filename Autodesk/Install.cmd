@@ -1,0 +1,1 @@
+%~dp0Installer.exe -i deploy --offline_mode --ui_mode basic -o %~dp0Collection.xml --installer_version 1.30.0.517
