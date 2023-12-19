@@ -9,5 +9,22 @@
 
 #######################################################################
 
+#Imports the ConfigMgr powershell module
+function Import-ConfigMgrModule {
+
+    param ( 
+
+    )
+
 Import-Module "C:\Program Files (x86)\Microsoft Configuration Manager\AdminConsole\bin\ConfigurationManager.psd1"
 Set-Location "$((Get-PSProvider | Where-Object {$_.Name -eq "CMSite"}).Drives.Name):"
+
+}
+
+function Import-ADModule {
+
+    param ( 
+
+    )
+        OptionalParameters
+}
