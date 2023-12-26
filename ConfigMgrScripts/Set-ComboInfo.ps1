@@ -551,7 +551,7 @@ if ($tsenv)
             @{ Err = "8024200D"; Msg = 'Update Needs to be Downloaded Again.' }
             @{ Err = "0"; Msg = 'Windows Setup completed successfully.' }
             )
-        $ErrorMsg = $winipuret | ? err -eq $hexreturncode  | % Msg
+        $ErrorMsg = $winipuret | Where-Object err -eq $hexreturncode  | ForEach-Object Msg
 
         #Gets the Time in minutes it takes to run the Setup.exe Step (CS or IPU only)
         $DifferenceUpgrade = ([datetime]$TSEnv.Value('SMSTS_FinishUpgradeTime')) - ([datetime]$TSEnv.Value('SMSTS_StartUpgradeTime')) 
@@ -667,7 +667,7 @@ if ($tsenv)
     if ($SetOSDInfoType -eq 'CS')
         {    
         #Check if Driver Download was specified
-        if ($tsenv.Value("W10X64DRIVERPACKAGE") -eq $null)
+        if ($null -eq $tsenv.Value("W10X64DRIVERPACKAGE"))
             {
             $Skip = "True"
             New-Variable -Name "$($AttributePrefix)CS_TSDriverDLTime" -Value "NA"
