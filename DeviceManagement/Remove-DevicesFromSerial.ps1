@@ -8,11 +8,9 @@
 
     .CHANGELOG
         2023-12-19 - Initial Commit
-        2023-12-29 - 
+        2024-01-23 - Updated with error handling and reporting via email
 
     .TODO
-        -add error handling
-        -add reporting via email
         -add handling to not delete current device name
         -add protection from deletion when too many objects are found
 #>
@@ -30,16 +28,22 @@ function Remove-DeviceAD
         [String]$TargetOU
     )
 
-    $ADResults = @()
-    $SearchAD = [System.DirectoryServices.DirectorySearcher]$TargetOU
-    $SearchAD.Filter = "(&(objectclass=computer)(name=*$SerialNumber))"
-    $ADComputers = $SearchAD.FindAll()
-    ForEach($ADComputer in $ADComputers)
-    {
-        $ADResults += ($ADComputer.GetDirectoryEntry()).DistinguishedName
-        ($ADComputer.GetDirectoryEntry()).DeleteTree()
+    try {
+        $ADResults = @()
+        $SearchAD = [System.DirectoryServices.DirectorySearcher]$TargetOU
+        $SearchAD.Filter = "(&(objectclass=computer)(name=*$SerialNumber))"
+        $ADComputers = $SearchAD.FindAll()
+        ForEach($ADComputer in $ADComputers)
+        {
+            $ADResults += ($ADComputer.GetDirectoryEntry()).DistinguishedName
+            ($ADComputer.GetDirectoryEntry()).DeleteTree()
+        }
+        return $ADResults
     }
-    return $ADResults
+    catch {
+        Write-Error "Error removing device from Active Directory: $_"
+        return @()
+    }
 }
 
 function Remove-DeviceCM
@@ -55,15 +59,21 @@ function Remove-DeviceCM
         [String]$SiteServer
     )
 
-    $CMResults = @()
-    $Query = $ExecutionContext.InvokeCommand.ExpandString("Select * From SMS_R_SYSTEM WHERE Name Like '%$SerialNumber'")
-    $CMComputers = Get-CimInstance -Namespace "ROOT\SMS\Site_$($SiteCode)" -Query $Query -ComputerName $SiteServer
-    ForEach($CMComputer in $CMComputers)
-    {
-        $CMResults += $CMComputer.Name
-        $CMComputer | Remove-CimInstance -Confirm:$false
+    try {
+        $CMResults = @()
+        $Query = $ExecutionContext.InvokeCommand.ExpandString("Select * From SMS_R_SYSTEM WHERE Name Like '%$SerialNumber'")
+        $CMComputers = Get-CimInstance -Namespace "ROOT\SMS\Site_$($SiteCode)" -Query $Query -ComputerName $SiteServer
+        ForEach($CMComputer in $CMComputers)
+        {
+            $CMResults += $CMComputer.Name
+            $CMComputer | Remove-CimInstance -Confirm:$false
+        }
+        return $CMResults
     }
-    return $CMResults
+    catch {
+        Write-Error "Error removing device from Configuration Manager: $_"
+        return @()
+    }
 }
 
 function Show-Results
@@ -102,6 +112,24 @@ function Show-Results
     }
 }
 
+function Send-EmailReport
+{
+    param (
+        [String]$Subject,
+        [String]$Body
+    )
+
+    $EmailParams = @{
+        SmtpServer  = "your-smtp-server"
+        From        = "sender@example.com"
+        To          = "recipient@example.com"
+        Subject     = $Subject
+        Body        = $Body
+    }
+
+    Send-MailMessage @EmailParams
+}
+
 # Main Program ===================================================================================================
 
 # Get the device serial number
@@ -112,3 +140,11 @@ $ADResults = Remove-DeviceAD -SerialNumber $SerialNumber -TargetOU "LDAP://OU=My
 $CMResults = Remove-DeviceCM -SerialNumber $SerialNumber -SiteServer "MySiteServerFQDN" -SiteCode "MySiteCode"
 # Report results
 Show-Results -ADResults $ADResults -CMResults $CMResults
+
+# Send email report
+$EmailSubject = "Device Removal Script Report"
+$EmailBody = "Script execution completed.`r`n"
+$EmailBody += "Removed devices from Active Directory:`r`n $($ADResults -join "`r`n")`r`n"
+$EmailBody += "Removed devices from Configuration Manager:`r`n $($CMResults -join "`r`n")`r`n"
+
+Send-EmailReport -Subject $EmailSubject -Body $EmailBody
