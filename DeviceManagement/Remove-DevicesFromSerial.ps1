@@ -11,7 +11,7 @@
         2024-01-23 - Updated with error handling and reporting via email
 
     .TODO
-        -add handling to not delete current device name
+        -add handling to search function that if the serial number matches the current device name, do not add it to the list to be removed.
         -add protection from deletion when too many objects are found
 #>
 
