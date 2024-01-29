@@ -11,8 +11,8 @@
         2024-01-23 - Updated with error handling and reporting via email
 
     .TODO
-        -add handling to search function that if the serial number matches the current device name, do not add it to the list to be removed.
-        -add protection from deletion when too many objects are found
+        -add handling to search function that when searching for devices by serial numbers, if the current device name contains the serial number, it needs to be excluded from the search results.
+        -add handling for when too many results are returned. If the search results are over 10, break out of the script.
 #>
 
 # Functions ======================================================================================================
