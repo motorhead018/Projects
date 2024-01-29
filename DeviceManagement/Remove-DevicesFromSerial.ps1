@@ -9,6 +9,7 @@
     .CHANGELOG
         2023-12-19 - Initial Commit
         2024-01-23 - Updated with error handling and reporting via email
+        2024-01-29 - Updated with search refinements: exclude device with matching serial number from results, and breaking out of the script if there are too many results.
 
     .TODO
         -add handling to search function that when searching for devices by serial numbers, if the current device name contains the serial number, it needs to be excluded from the search results.
