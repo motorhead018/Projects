@@ -1,6 +1,6 @@
 <#
     .DESCRIPTION
-        Remove device object(s) from AD and CM with a name matching the serial number of the device running the script
+        Remove device object(s) from AD and CM with a name matching the serial number of the device running the script. The intention is to have the script run towards the end of the task sequence ie when it is in Windows.
 
     .NOTES
         Created by: Now Micro, Inc.
@@ -9,7 +9,7 @@
     .CHANGELOG
         2023-12-19 - Initial Commit
         2024-01-23 - Updated with error handling and reporting via email
-        2024-01-29 - Updated with search refinements: exclude device with matching serial number from results, and breaking out of the script if there are too many results.
+        2024-02-02 - Updated with search refinements: exclude device with matching serial number from results. Still need to add: breaking out of the script if there are too many results.
 
     .TODO
         -add handling to search function that when searching for devices by serial numbers, if the current device name contains the serial number, it needs to be excluded from the search results.
@@ -34,8 +34,15 @@ function Remove-DeviceAD
         $SearchAD = [System.DirectoryServices.DirectorySearcher]$TargetOU
         $SearchAD.Filter = "(&(objectclass=computer)(name=*$SerialNumber))"
         $ADComputers = $SearchAD.FindAll()
-        ForEach($ADComputer in $ADComputers)
-        {
+
+        ForEach($ADComputer in $ADComputers) {
+        
+          #Check to see if the current computer name is found in $ADComputerName
+          if ($ADComputer -eq "$env:computername") {
+              Write-Output "Skipping current computer ($ADComputerName) from removal."
+              continue
+          }  
+          
             $ADResults += ($ADComputer.GetDirectoryEntry()).DistinguishedName
             ($ADComputer.GetDirectoryEntry()).DeleteTree()
         }
