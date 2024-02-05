@@ -7,9 +7,10 @@
         Created date: 2023-12-19
 
     .CHANGELOG
-        2023-12-19 - Initial Commit
-        2024-01-23 - Updated with error handling and reporting via email
-        2024-02-02 - Updated with search refinements: exclude device with matching serial number from results. Still need to add: breaking out of the script if there are too many results.
+        2023-12-19: Initial Commit
+        2024-01-23: Updated with error handling and reporting via email
+        2024-02-02: Updated with search refinements: exclude device with matching serial number from results. Still need to add: breaking out of the script if there are too many results.
+        2024-02-05: Added the Write-Log function created by  Nickolaj Andersen and Maurice Daly. Modified by Jon Anderson. 
 
     .TODO
         -add handling to search function that when searching for devices by serial numbers, if the current device name contains the serial number, it needs to be excluded from the search results.
@@ -138,21 +139,112 @@ function Send-EmailReport
     Send-MailMessage @EmailParams
 }
 
+function Write-LogEntry
+{
+    <#
+        .DESCRIPTION
+            Write data to a CMTrace compatible log file
+
+        .PARAMETER Value
+            The data to write to the log file
+
+        .PARAMETER Severity
+            The severity of the log file entry (1 = Information, 2 = Warning, 3 = Error)
+
+        .PARAMETER FileName
+            The name of the log file
+
+        .EXAMPLE
+            Write-LogEntry -Value "This is a log entry" -Severity 1
+
+        .NOTES
+            Created by: Nickolaj Andersen / Maurice Daly
+            Modified by: Jon Anderson
+            Modified: 2023-09-06
+
+    #>
+	param(
+		[parameter(Mandatory = $true, HelpMessage = "Value added to the log file.")][ValidateNotNullOrEmpty()]
+        [string]$Value,
+		[parameter(Mandatory = $true, HelpMessage = "Severity for the log entry. 1 for Informational, 2 for Warning and 3 for Error.")][ValidateNotNullOrEmpty()][ValidateSet("1", "2", "3")]
+        [string]$Severity,
+		[parameter(Mandatory = $false, HelpMessage = "Name of the log file that the entry will written to.")][ValidateNotNullOrEmpty()]
+        [string]$FileName = "Win32AppManagement.log"
+	)
+
+	$LogFilePath = Join-Path -Path $LogsDirectory -ChildPath $FileName
+	if(-not(Test-Path -Path 'variable:global:TimezoneBias'))
+	{
+		[string]$global:TimezoneBias = [System.TimeZoneInfo]::Local.GetUtcOffset((Get-Date)).TotalMinutes
+		if($TimezoneBias -match "^-")
+		{
+			$TimezoneBias = $TimezoneBias.Replace('-', '+')
+		}
+		else
+		{
+			$TimezoneBias = '-' + $TimezoneBias
+		}
+	}
+	$Time = -join @((Get-Date -Format "HH:mm:ss.fff"), $TimezoneBias)	
+	$Date = (Get-Date -Format "MM-dd-yyyy")
+	$Context = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
+	$LogText = "<![LOG[$($Value)]LOG]!><time=""$($Time)"" date=""$($Date)"" component=""Win32AppManagement"" context=""$($Context)"" type=""$($Severity)"" thread=""$($PID)"" file="""">"
+	try
+	{
+		Out-File -InputObject $LogText -Append -NoClobber -Encoding Default -FilePath $LogFilePath -ErrorAction Stop
+	}
+	catch [System.Exception]
+	{
+		Write-Warning -Message "Unable to append log entry to $FileName file. Error message at line $($_.InvocationInfo.ScriptLineNumber): $($_.Exception.Message)"
+	}
+}
+
 # Main Program ===================================================================================================
 
-# Get the device serial number
-$SerialNumber = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber
-# Remove matching devices from Active Directory
-$ADResults = Remove-DeviceAD -SerialNumber $SerialNumber -TargetOU "LDAP://OU=MyOUName,DC=MyDomainName,DC=MyDomainSuffix"
-# Remove matching devices from Configuration Manager
-$CMResults = Remove-DeviceCM -SerialNumber $SerialNumber -SiteServer "MySiteServerFQDN" -SiteCode "MySiteCode"
-# Report results
-Show-Results -ADResults $ADResults -CMResults $CMResults
+# Define Log File Path
+$LogFilePath = "C:\Windows\CCM\Logs\DeviceRemovalScript.log"
 
-# Send email report
-$EmailSubject = "Device Removal Script Report"
-$EmailBody = "Script execution completed.`r`n"
-$EmailBody += "Removed devices from Active Directory:`r`n $($ADResults -join "`r`n")`r`n"
-$EmailBody += "Removed devices from Configuration Manager:`r`n $($CMResults -join "`r`n")`r`n"
+# Log script start
+Write-LogEntry -Value "Script started" -Severity 1 -FileName $LogFilePath
 
-Send-EmailReport -Subject $EmailSubject -Body $EmailBody
+try {
+    # Get the device serial number
+    $SerialNumber = (Get-CimInstance -ClassName Win32_BIOS).SerialNumber
+
+    # Log serial number
+    Write-LogEntry -Value "Serial number: $SerialNumber" -Severity 1 -FileName $LogFilePath
+
+    # Remove matching devices from Active Directory
+    $ADResults = Remove-DeviceAD -SerialNumber $SerialNumber -TargetOU "LDAP://OU=MyOUName,DC=MyDomainName,DC=MyDomainSuffix"
+
+    # Log Active Directory removal results
+    Write-LogEntry -Value "Removed devices from Active Directory:`r`n$($ADResults -join "`r`n")" -Severity 1 -FileName $LogFilePath
+
+    # Remove matching devices from Configuration Manager
+    $CMResults = Remove-DeviceCM -SerialNumber $SerialNumber -SiteServer "MySiteServerFQDN" -SiteCode "MySiteCode"
+
+    # Log Configuration Manager removal results
+    Write-LogEntry -Value "Removed devices from Configuration Manager:`r`n$($CMResults -join "`r`n")" -Severity 1 -FileName $LogFilePath
+
+    # Report results
+    Show-Results -ADResults $ADResults -CMResults $CMResults
+
+    # Send email report
+    $EmailSubject = "Device Removal Script Report"
+    $EmailBody = "Script execution completed.`r`n"
+    $EmailBody += "Removed devices from Active Directory:`r`n $($ADResults -join "`r`n")`r`n"
+    $EmailBody += "Removed devices from Configuration Manager:`r`n $($CMResults -join "`r`n")`r`n"
+
+    Write-LogEntry -Value $EmailBody -Severity 1 -FileName $LogFilePath
+
+    Send-EmailReport -Subject $EmailSubject -Body $EmailBody
+
+    # Log script end
+    Write-LogEntry -Value "Script completed" -Severity 1 -FileName $LogFilePath
+}
+catch {
+    # Log error
+    Write-LogEntry -Value "Error: $_" -Severity 3 -FileName $LogFilePath
+    # Handle error as needed
+    
+}
