@@ -1,7 +1,6 @@
 # there is an assumption that only 1 wim file is in this folder
-$wimFile = "image.wim"
-#$mountPath = "C:\windows\temp\temp_" + $wimFile.BaseName
-$mountpath	= "C:\windows\temp\temp_image"
+$wimFile = Get-ChildItem -Filter *.wim
+$mountPath = Join-Path $PSScriptRoot $wimFile.BaseName
 
 ## Create / Test the folder to mount the WIM to
 
@@ -41,8 +40,8 @@ TRY {
 
 try {
     ## mount the WIM here
-	#New-Item -Path $mountPath -ItemType Directory
-	Mount-WindowsImage -ImagePath $wimFile -Index 1 -Path $mountPath
+	New-Item -Path $mountPath -ItemType Directory
+	Mount-WindowsImage -ImagePath $wimFile.FullName -Index 1 -Path $mountPath
 }
 catch {
     ## failed to mount the WIM, can't proceed
@@ -51,9 +50,11 @@ catch {
 
 try {
     ## perform your install here
-	# call the install.cmd that is contained within the WIM file
-	#powershell.exe -ExecutionPolicy Bypass .\Install.ps1
-	cmd /c $mountPath\Install.cmd 	
+    #call the silentInstall-enduser.ps1 script that is contained within the WIM file
+	powershell.exe -ExecutionPolicy Bypass $PSScriptRoot\silentInstall-enduser.ps1 SERVER SERVER
+	
+    #call the install.cmd that is contained within the WIM file
+	#cmd /c $mountPath\Install.cmd 	
     ## set exit return code to success value
     $returnCode = 0
 }
